@@ -9,9 +9,32 @@ import json
 import os
 
 
+# Fungsi tidak boleh kosong
+def get_valid_input(prompt):
+    while True:
+        value = input(prompt).strip()
+        if value:
+            return value
+        else:
+            print("Input tidak boleh kosong. Silakan coba lagi.")
+
+
 # Fungsi Hash
 def hash_data(data):
     return hashlib.sha256(data.encode()).hexdigest()
+
+
+# Kunci AES
+def save_key(key, filename="key.bin"):
+    with open(filename, "wb") as file:
+        file.write(key)
+
+
+def load_key(filename="key.bin"):
+    if os.path.exists(filename):
+        with open(filename, "rb") as file:
+            return file.read()
+    return None
 
 
 # Fungsi Caesar Cipher
@@ -131,10 +154,10 @@ def decrypt_all_data(data, aes_key):
 # Fungsi untuk menambah data tentara
 def add_soldier(data, aes_key):
     clear_screen()
-    name = input("Masukkan nama tentara: ")
-    age = input("Masukkan umur tentara: ")
-    position = input("Masukkan jabatan tentara: ")
-    password = input("Masukkan password tentara: ")
+    name = get_valid_input("Masukkan nama tentara: ")
+    age = get_valid_input("Masukkan umur tentara: ")
+    position = get_valid_input("Masukkan jabatan tentara: ")
+    password = get_valid_input("Masukkan password tentara: ")
 
     # Hash password
     hashed_password = hash_data(password)
@@ -276,8 +299,12 @@ def steganography_menu():
 
 # Menu Utama
 def main():
+    aes_key = load_key()
+    if aes_key is None:
+        aes_key = get_random_bytes(16)
+        save_key(aes_key)
+
     data = load_data()
-    aes_key = get_random_bytes(16)
 
     while True:
         clear_screen()
