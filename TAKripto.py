@@ -93,54 +93,155 @@ def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 
-# Fungsi login tentara
-def soldier_login(data):
-    clear_screen()
-    print("--- Login Tentara ---")
-    username = input("Masukkan nama tentara: ")
-    hashed_username = hash_data(username)
-    if hashed_username in data:
-        print("Data Anda:")
-        print(f"Nama: {username}")
-        print(f"Umur: {data[hashed_username]['age']}")
-        print(f"Jabatan: {data[hashed_username]['position']}")
-    else:
-        print("Data tidak ditemukan!")
-    input("\nTekan Enter untuk kembali ke menu...")  # Tunggu input sebelum kembali
-    clear_screen()
+# Fungsi Dekripsi Nama
+def decrypt_name(encrypted_name_hex, aes_key):
+    encrypted_name = bytes.fromhex(encrypted_name_hex)
+    aes_decrypted = aes_decrypt(aes_key, encrypted_name)
+    rc4_decrypted = rc4_encrypt("mysecretkey", aes_decrypted)
+    return caesar_cipher_encrypt(rc4_decrypted, -3)
 
 
-# Fungsi admin menu
-def admin_menu(data):
-    print("Data Tentara:")
-    for hashed_username, details in data.items():
-        print(f"Nama (Hashed): {hashed_username}")
-        print(f"Umur: {details['age']}")
-        print(f"Jabatan: {details['position']}")
-        print("=======================================")
-
-
-# Fungsi Dekripsi Data oleh Admin
-def decrypt_data(data, aes_key):
-    for hashed_username, details in data.items():
+# Fungsi Dekripsi Semua Data
+def decrypt_all_data(data, aes_key):
+    decrypted_data = []
+    for encrypted_name_hex, details in data.items():
         try:
+            # Dekripsi nama
+            name = decrypt_name(encrypted_name_hex, aes_key)
+
+            # Dekripsi data lainnya
             encrypted_data = bytes.fromhex(details["encrypted_data"])
             aes_decrypted = aes_decrypt(aes_key, encrypted_data)
-
-            # Reverse Super Encryption (RC4 + Caesar)
-            rc4_decrypted = rc4_encrypt(
-                "mysecretkey", aes_decrypted
-            )  # RC4 dekripsi menggunakan kunci yang sama
+            rc4_decrypted = rc4_encrypt("mysecretkey", aes_decrypted)
             caesar_decrypted = caesar_cipher_encrypt(rc4_decrypted, -3)
+            age, position = caesar_decrypted.split("|")
 
-            print(f"Nama (Hashed): {hashed_username}")
-            print(f"Data Terdekripsi: {caesar_decrypted}")
-            print("=======================================")
+            decrypted_data.append(
+                {
+                    "name": name,
+                    "age": age,
+                    "position": position,
+                }
+            )
         except Exception as e:
-            print(f"Kesalahan saat mendekripsi data untuk {hashed_username}: {e}")
+            print(f"Kesalahan saat mendekripsi data: {e}")
+    return decrypted_data
 
 
-# Fungsi Steganography oleh Admin
+# Fungsi untuk menambah data tentara
+def add_soldier(data, aes_key):
+    clear_screen()
+    name = input("Masukkan nama tentara: ")
+    age = input("Masukkan umur tentara: ")
+    position = input("Masukkan jabatan tentara: ")
+    password = input("Masukkan password tentara: ")
+
+    # Hash password
+    hashed_password = hash_data(password)
+
+    # Super-enkripsi data
+    raw_data = f"{age}|{position}"
+    caesar_encrypted_data = caesar_cipher_encrypt(raw_data, 3)
+    rc4_encrypted_data = rc4_encrypt("mysecretkey", caesar_encrypted_data)
+    aes_encrypted_data = aes_encrypt(aes_key, rc4_encrypted_data)
+
+    # Super-enkripsi nama
+    caesar_encrypted_name = caesar_cipher_encrypt(name, 3)
+    rc4_encrypted_name = rc4_encrypt("mysecretkey", caesar_encrypted_name)
+    aes_encrypted_name = aes_encrypt(aes_key, rc4_encrypted_name)
+
+    # Simpan data
+    data[aes_encrypted_name.hex()] = {
+        "password": hashed_password,
+        "encrypted_data": aes_encrypted_data.hex(),
+    }
+    save_data(data)
+    print("Data tentara berhasil disimpan!")
+    input("\nTekan Enter untuk kembali ke menu...")
+
+
+# Menu Tentara
+def soldier_menu(data, aes_key, name_hex):
+    clear_screen()
+    name = decrypt_name(name_hex, aes_key)
+    print(f"--- Selamat Datang, {name} ---")
+    print("1. Lihat Data Diri")
+    print("2. Menu Steganografi")
+    print("3. Keluar")
+    choice = input("Pilih menu: ")
+
+    if choice == "1":
+        clear_screen()
+        encrypted_data = bytes.fromhex(data[name_hex]["encrypted_data"])
+        aes_decrypted = aes_decrypt(aes_key, encrypted_data)
+        rc4_decrypted = rc4_encrypt("mysecretkey", aes_decrypted)
+        caesar_decrypted = caesar_cipher_encrypt(rc4_decrypted, -3)
+        age, position = caesar_decrypted.split("|")
+        print(f"Nama: {name}")
+        print(f"Umur: {age}")
+        print(f"Jabatan: {position}")
+        input("\nTekan Enter untuk kembali ke menu...")
+    elif choice == "2":
+        steganography_menu()
+    elif choice == "3":
+        return
+    else:
+        print("Pilihan tidak valid!")
+        input("\nTekan Enter untuk mencoba lagi...")
+
+
+# Menu Admin
+def admin_menu(data, aes_key):
+    while True:
+        clear_screen()
+        print("--- Admin Menu ---")
+        print("1. Tambah Data Tentara")
+        print("2. Lihat Semua Data (Terenkripsi)")
+        print("3. Lihat Semua Data (Terdekripsi)")
+        print("4. Keluar")
+        choice = input("Pilih menu: ")
+
+        if choice == "1":
+            add_soldier(data, aes_key)
+        elif choice == "2":
+            clear_screen()
+            print("Data Tentara (Terenkripsi):")
+            for encrypted_name, details in data.items():
+                print(f"Nama Terenkripsi: {encrypted_name}")
+                print(f"Data Terenkripsi: {details['encrypted_data']}")
+                print("=======================================")
+            input("\nTekan Enter untuk kembali ke menu...")
+        elif choice == "3":
+            clear_screen()
+            print("Data Tentara (Terdekripsi):")
+            decrypted_data = decrypt_all_data(data, aes_key)
+            for item in decrypted_data:
+                print(f"Nama: {item['name']}")
+                print(f"Umur: {item['age']}")
+                print(f"Jabatan: {item['position']}")
+                print("=======================================")
+            input("\nTekan Enter untuk kembali ke menu...")
+        elif choice == "4":
+            break
+        else:
+            print("Pilihan tidak valid!")
+            input("\nTekan Enter untuk mencoba lagi...")
+
+
+# Fungsi Login Admin
+def admin_login(data, aes_key):
+    clear_screen()
+    username = input("Masukkan username admin: ")
+    password = input("Masukkan password admin: ")
+
+    if username == "admin" and password == "admin":
+        admin_menu(data, aes_key)
+    else:
+        print("Login gagal! Username atau password salah.")
+        input("\nTekan Enter untuk kembali ke menu...")
+
+
+# Menu Steganografi
 def steganography_menu():
     while True:
         clear_screen()
@@ -156,112 +257,57 @@ def steganography_menu():
             output_path = input(
                 "Masukkan path gambar output (contoh: gambar_tersembunyi.png): "
             )
-            message = input("Masukkan data yang ingin disisipkan: ")
-
-            try:
-                steganography_encrypt(image_path, message, output_path)
-                print(f"Data berhasil disisipkan ke gambar: {output_path}")
-            except Exception as e:
-                print(f"Terjadi kesalahan: {e}")
-            input("\nTekan Enter untuk kembali ke menu...")  # Tunggu input
+            message = input("Masukkan pesan yang akan disisipkan: ")
+            steganography_encrypt(image_path, message, output_path)
+            print("Pesan berhasil disisipkan ke dalam gambar!")
+            input("\nTekan Enter untuk kembali ke menu...")
         elif choice == "2":
             clear_screen()
-            image_path = input("Masukkan path gambar yang ingin dibaca: ")
-
-            try:
-                message = steganography_decrypt(image_path)
-                print(f"Data tersembunyi di gambar: {message}")
-            except Exception as e:
-                print(f"Terjadi kesalahan: {e}")
-            input("\nTekan Enter untuk kembali ke menu...")  # Tunggu input
+            image_path = input("Masukkan path gambar: ")
+            message = steganography_decrypt(image_path)
+            print(f"Pesan tersembunyi: {message}")
+            input("\nTekan Enter untuk kembali ke menu...")
         elif choice == "3":
-            clear_screen()
             break
         else:
-            print("Pilihan tidak valid! Silakan coba lagi.")
-            input("\nTekan Enter untuk mencoba lagi...")  # Tunggu input
-
-
-# menu admin
-def admin_menu(data, aes_key):
-    while True:
-        clear_screen()
-        print("--- Admin Menu ---")
-        print("1. Lihat Semua Data (Terenkripsi)")
-        print("2. Dekripsi dan Lihat Data")
-        print("3. Kembali ke Menu Utama")
-        choice = input("Pilih menu: ")
-
-        if choice == "1":
-            clear_screen()
-            print("Data Tentara (Terenkripsi):")
-            for hashed_username, details in data.items():
-                print(f"Nama (Hashed): {hashed_username}")
-                print(f"Data Terenkripsi: {details['encrypted_data']}")
-                print("=======================================")
-            input("\nTekan Enter untuk kembali ke menu...")  # Tunggu input
-        elif choice == "2":
-            clear_screen()
-            print("Dekripsi Data:")
-            decrypt_data(data, aes_key)
-            input("\nTekan Enter untuk kembali ke menu...")  # Tunggu input
-        elif choice == "3":
-            clear_screen()
-            break
-        else:
-            print("Pilihan tidak valid! Silakan coba lagi.")
-            input("\nTekan Enter untuk mencoba lagi...")  # Tunggu input
+            print("Pilihan tidak valid!")
+            input("\nTekan Enter untuk mencoba lagi...")
 
 
 # Menu Utama
 def main():
     data = load_data()
-    aes_key = get_random_bytes(16)  # Kunci AES untuk mengenkripsi data baru
+    aes_key = get_random_bytes(16)
 
     while True:
         clear_screen()
-        print("--- Sistem Pengamanan Data Tentara ---")
-        print("1. Tambah Data Tentara")
+        print("--- Sistem Tentara ---")
+        print("1. Login Admin")
         print("2. Login Tentara")
-        print("3. Admin Menu")
-        print("4. Menu Steganografi")
-        print("5. Keluar")
+        print("3. Keluar")
         choice = input("Pilih menu: ")
 
         if choice == "1":
-            clear_screen()
-            name = input("Masukkan nama: ")
-            age = input("Masukkan umur: ")
-            position = input("Masukkan jabatan: ")
-
-            # Enkripsi dan simpan data
-            raw_data = f"{name}|{age}|{position}"
-            hashed_name = hash_data(name)
-            caesar_encrypted = caesar_cipher_encrypt(raw_data, 3)
-            rc4_encrypted = rc4_encrypt("mysecretkey", caesar_encrypted)
-            aes_encrypted = aes_encrypt(aes_key, rc4_encrypted)
-
-            data[hashed_name] = {
-                "age": age,
-                "position": position,
-                "encrypted_data": aes_encrypted.hex(),
-            }
-            save_data(data)
-            print("Data tentara berhasil disimpan!")
-            input("\nTekan Enter untuk kembali ke menu...")  # Tunggu input
+            admin_login(data, aes_key)
         elif choice == "2":
-            soldier_login(data)
-        elif choice == "3":
-            admin_menu(data, aes_key)
-        elif choice == "4":
-            steganography_menu()
-        elif choice == "5":
             clear_screen()
-            print("Keluar dari sistem...")
+            encrypted_name = input("Masukkan nama terenkripsi Anda: ")
+            password = input("Masukkan password: ")
+
+            if (
+                encrypted_name in data
+                and hash_data(password) == data[encrypted_name]["password"]
+            ):
+                soldier_menu(data, aes_key, encrypted_name)
+            else:
+                print("Login gagal! Nama atau password salah.")
+                input("\nTekan Enter untuk kembali ke menu...")
+        elif choice == "3":
+            print("Terima kasih telah menggunakan sistem!")
             break
         else:
-            print("Pilihan tidak valid! Silakan coba lagi.")
-            input("\nTekan Enter untuk mencoba lagi...")  # Tunggu input
+            print("Pilihan tidak valid!")
+            input("\nTekan Enter untuk mencoba lagi...")
 
 
 if __name__ == "__main__":
